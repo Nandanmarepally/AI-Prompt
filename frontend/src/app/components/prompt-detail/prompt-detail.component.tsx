@@ -85,6 +85,14 @@ export default function PromptDetailComponent() {
 
           <div className="detail-divider" />
 
+          {prompt.tags.length > 0 && (
+            <div className="detail-tags">
+              {prompt.tags.map((t) => (
+                <span key={t} className="tag-pill">#{t}</span>
+              ))}
+            </div>
+          )}
+
           <p className="detail-content-label">Prompt Content</p>
           <pre className="detail-content">{prompt.content}</pre>
         </div>

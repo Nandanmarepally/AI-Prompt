@@ -5,6 +5,7 @@ export interface Prompt {
   title: string;
   content: string;
   complexity: number;
+  tags: string[];
   created_at: string;
   view_count: number;
 }
@@ -12,7 +13,9 @@ export interface Prompt {
 export interface PromptListItem {
   id: number;
   title: string;
+  content: string;
   complexity: number;
+  tags: string[];
   created_at: string;
   view_count: number;
 }
@@ -21,6 +24,7 @@ export interface CreatePromptPayload {
   title: string;
   content: string;
   complexity: number;
+  tags: string[];
 }
 
 export interface ApiError {

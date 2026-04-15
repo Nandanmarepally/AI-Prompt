@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createPrompt } from '../../services/prompt.service';
 import type { CreatePromptPayload } from '../../models/prompt.model';
@@ -16,7 +16,7 @@ interface FormTouched {
   complexity: boolean;
 }
 
-function validate(values: CreatePromptPayload): FormErrors {
+function validate(values: Omit<CreatePromptPayload, 'tags'>): FormErrors {
   const errors: FormErrors = {};
   if (!values.title.trim()) {
     errors.title = 'Title is required.';
@@ -39,21 +39,18 @@ function validate(values: CreatePromptPayload): FormErrors {
 export default function AddPromptComponent() {
   const navigate = useNavigate();
 
-  const [values, setValues] = useState<CreatePromptPayload>({
-    title: '',
-    content: '',
-    complexity: 5,
-  });
+  const [values, setValues] = useState({ title: '', content: '', complexity: 5 });
+  const [tags, setTags]     = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState('');
+
   const [touched, setTouched] = useState<FormTouched>({
-    title: false,
-    content: false,
-    complexity: false,
+    title: false, content: false, complexity: false,
   });
   const [submitting, setSubmitting] = useState(false);
-  const [showToast, setShowToast] = useState(false);
+  const [showToast, setShowToast]   = useState(false);
   const [serverErrors, setServerErrors] = useState<FormErrors>({});
 
-  const errors = validate(values);
+  const errors  = validate(values);
   const isValid = Object.keys(errors).length === 0;
 
   function touch(field: keyof FormTouched) {
@@ -66,6 +63,29 @@ export default function AddPromptComponent() {
       : undefined;
   }
 
+  // ── Tag helpers ──────────────────────────────────────────────
+  function addTag(raw: string) {
+    const t = raw.trim().toLowerCase().replace(/\s+/g, '-');
+    if (t && !tags.includes(t) && tags.length < 8) {
+      setTags((prev) => [...prev, t]);
+    }
+    setTagInput('');
+  }
+
+  function handleTagKey(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      addTag(tagInput);
+    } else if (e.key === 'Backspace' && tagInput === '' && tags.length > 0) {
+      setTags((prev) => prev.slice(0, -1));
+    }
+  }
+
+  function removeTag(t: string) {
+    setTags((prev) => prev.filter((x) => x !== t));
+  }
+
+  // ── Submit ───────────────────────────────────────────────────
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setTouched({ title: true, content: true, complexity: true });
@@ -78,16 +98,16 @@ export default function AddPromptComponent() {
         title: values.title.trim(),
         content: values.content.trim(),
         complexity: values.complexity,
+        tags,
       });
       setShowToast(true);
-      setTimeout(() => {
-        setShowToast(false);
-        navigate('/prompts');
-      }, 2800);
+      setTimeout(() => { setShowToast(false); navigate('/prompts'); }, 2800);
     } catch (err: unknown) {
       const apiErr = err as { errors?: Record<string, string>; error?: string };
       if (apiErr?.errors) {
         setServerErrors(apiErr.errors as FormErrors);
+      } else if ((apiErr as { error?: string })?.error === 'Authentication required.') {
+        navigate('/login');
       } else {
         setServerErrors({ general: apiErr?.error ?? 'Something went wrong. Please try again.' });
       }
@@ -113,9 +133,7 @@ export default function AddPromptComponent() {
 
         <div className="add-card">
           <h2>Create New Prompt</h2>
-          <p className="subtitle">
-            Add a new AI image generation prompt to your library
-          </p>
+          <p className="subtitle">Add a new AI image generation prompt to your library</p>
 
           {serverErrors.general && (
             <div className="error-banner">⚠ {serverErrors.general}</div>
@@ -176,33 +194,17 @@ export default function AddPromptComponent() {
                   <input
                     id="field-complexity"
                     type="range"
-                    min={1}
-                    max={10}
-                    step={1}
+                    min={1} max={10} step={1}
                     value={values.complexity}
-                    onChange={(e) =>
-                      setValues({ ...values, complexity: Number(e.target.value) })
-                    }
+                    onChange={(e) => setValues({ ...values, complexity: Number(e.target.value) })}
                     onBlur={() => touch('complexity')}
-                    style={{
-                      accentColor: complexityColor(values.complexity),
-                    }}
+                    style={{ accentColor: complexityColor(values.complexity) }}
                   />
-                  <span
-                    className="range-value"
-                    style={{ color: complexityColor(values.complexity) }}
-                  >
+                  <span className="range-value" style={{ color: complexityColor(values.complexity) }}>
                     {values.complexity}
                   </span>
                 </div>
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    fontSize: '0.75rem',
-                    color: 'var(--text-muted)',
-                  }}
-                >
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                   <span>Simple (1)</span>
                   <span>Complex (10)</span>
                 </div>
@@ -210,6 +212,40 @@ export default function AddPromptComponent() {
               {getError('complexity') && (
                 <span className="form-error">⚠ {getError('complexity')}</span>
               )}
+            </div>
+
+            {/* Tags */}
+            <div className="form-group">
+              <label className="form-label" htmlFor="field-tags">
+                Tags <span className="form-hint" style={{ fontWeight: 400 }}>(optional · press Enter or comma to add)</span>
+              </label>
+              <div className="tag-input-box">
+                {tags.map((t) => (
+                  <span key={t} className="tag-pill tag-pill-removable">
+                    #{t}
+                    <button
+                      type="button"
+                      className="tag-remove-btn"
+                      onClick={() => removeTag(t)}
+                      aria-label={`Remove tag ${t}`}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+                <input
+                  id="field-tags"
+                  type="text"
+                  className="tag-inline-input"
+                  placeholder={tags.length === 0 ? 'anime, cyberpunk, portrait…' : ''}
+                  value={tagInput}
+                  onChange={(e) => setTagInput(e.target.value)}
+                  onKeyDown={handleTagKey}
+                  onBlur={() => tagInput && addTag(tagInput)}
+                  disabled={tags.length >= 8}
+                />
+              </div>
+              <span className="form-hint">{tags.length}/8 tags</span>
             </div>
 
             {/* Actions */}
@@ -225,9 +261,7 @@ export default function AddPromptComponent() {
                     <span className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} />
                     Saving…
                   </>
-                ) : (
-                  '✓ Save Prompt'
-                )}
+                ) : '✓ Save Prompt'}
               </button>
               <button
                 type="button"

@@ -1,13 +1,28 @@
+import { useState } from 'react';
 import { useNavigate, NavLink } from 'react-router-dom';
 import AppRouting from './app-routing.module';
+import { isAuthenticated, getUsername, logout } from './services/auth.service';
 
 /**
  * AppModule — root application shell.
- * Contains the sticky navbar and delegates page rendering to AppRouting.
- * Mirrors the role of Angular's AppModule + AppComponent.
+ * Manages auth state and renders navbar + routed pages.
  */
 export default function AppModule() {
   const navigate = useNavigate();
+  const [authed, setAuthed]     = useState(isAuthenticated);
+  const [username, setUsername] = useState(getUsername);
+
+  function handleLoginSuccess(name: string) {
+    setAuthed(true);
+    setUsername(name);
+  }
+
+  function handleLogout() {
+    logout();
+    setAuthed(false);
+    setUsername(null);
+    navigate('/prompts');
+  }
 
   return (
     <>
@@ -27,20 +42,43 @@ export default function AppModule() {
             >
               Browse
             </NavLink>
-            <button
-              id="nav-new-prompt"
-              className="btn nav-btn"
-              onClick={() => navigate('/add-prompt')}
-            >
-              <span>＋</span> New Prompt
-            </button>
+
+            {authed ? (
+              <>
+                <button
+                  id="nav-new-prompt"
+                  className="btn nav-btn"
+                  onClick={() => navigate('/add-prompt')}
+                >
+                  <span>＋</span> New Prompt
+                </button>
+                <div className="nav-user">
+                  <span className="nav-username">👤 {username}</span>
+                  <button
+                    id="nav-logout"
+                    className="btn btn-ghost nav-logout-btn"
+                    onClick={handleLogout}
+                  >
+                    Sign out
+                  </button>
+                </div>
+              </>
+            ) : (
+              <button
+                id="nav-login"
+                className="btn nav-btn"
+                onClick={() => navigate('/login')}
+              >
+                Sign In
+              </button>
+            )}
           </div>
         </div>
       </nav>
 
-      {/* ── Page content rendered by router ── */}
+      {/* ── Page content ── */}
       <main>
-        <AppRouting />
+        <AppRouting isAuthenticated={authed} onLoginSuccess={handleLoginSuccess} />
       </main>
     </>
   );
