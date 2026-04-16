@@ -6,10 +6,14 @@ import { isAuthenticated, getUsername, logout } from './services/auth.service';
 /**
  * AppModule — root application shell.
  * Manages auth state and renders navbar + routed pages.
+ *
+ * Navbar behaviour:
+ *  - Not logged in  → shows  "Sign In"  and  "Sign Up"  only
+ *  - Logged in      → shows  "Browse"  "New Prompt"  username  "Sign out"
  */
 export default function AppModule() {
   const navigate = useNavigate();
-  const [authed, setAuthed]     = useState(isAuthenticated);
+  const [authed, setAuthed] = useState(isAuthenticated);
   const [username, setUsername] = useState(getUsername);
 
   function handleLoginSuccess(name: string) {
@@ -21,7 +25,7 @@ export default function AppModule() {
     logout();
     setAuthed(false);
     setUsername(null);
-    navigate('/prompts');
+    navigate('/login');
   }
 
   return (
@@ -29,22 +33,23 @@ export default function AppModule() {
       {/* ── Sticky glassmorphism Navbar ── */}
       <nav className="navbar">
         <div className="container navbar-inner">
-          <NavLink to="/prompts" className="navbar-logo">
-            <span className="logo-icon">✦</span>
+          <NavLink to={authed ? '/prompts' : '/login'} className="navbar-logo">
+            <img src="/logo.png" alt="AI Prompt Library" className="navbar-logo-img" />
             AI Prompt Library
           </NavLink>
 
           <div className="navbar-nav">
-            <NavLink
-              to="/prompts"
-              id="nav-browse"
-              className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
-            >
-              Browse
-            </NavLink>
-
             {authed ? (
+              /* ── Authenticated navbar ─────────────────────────── */
               <>
+                <NavLink
+                  to="/prompts"
+                  id="nav-browse"
+                  className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+                >
+                  Browse
+                </NavLink>
+
                 <button
                   id="nav-new-prompt"
                   className="btn nav-btn"
@@ -52,6 +57,7 @@ export default function AppModule() {
                 >
                   <span>＋</span> New Prompt
                 </button>
+
                 <div className="nav-user">
                   <span className="nav-username">👤 {username}</span>
                   <button
@@ -64,13 +70,24 @@ export default function AppModule() {
                 </div>
               </>
             ) : (
-              <button
-                id="nav-login"
-                className="btn nav-btn"
-                onClick={() => navigate('/login')}
-              >
-                Sign In
-              </button>
+              /* ── Guest navbar ─────────────────────────────────── */
+              <>
+                <button
+                  id="nav-login"
+                  className="btn btn-ghost nav-btn"
+                  style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
+                  onClick={() => navigate('/login')}
+                >
+                  Sign In
+                </button>
+                <button
+                  id="nav-signup"
+                  className="btn nav-btn"
+                  onClick={() => navigate('/signup')}
+                >
+                  Sign Up
+                </button>
+              </>
             )}
           </div>
         </div>

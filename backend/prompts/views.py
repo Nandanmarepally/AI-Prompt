@@ -1,15 +1,22 @@
 import json
+import logging
 import datetime
 
 import jwt
 import redis
 from django.conf import settings
 from django.contrib.auth import authenticate
+from django.contrib.auth.models import User
+from django.core.mail import send_mail
+from django.core.validators import validate_email
+from django.core.exceptions import ValidationError
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
-from .models import Prompt, Tag
+logger = logging.getLogger(__name__)
+
+from .models import Prompt, Tag, PasswordResetToken
 
 # ── Redis client ─────────────────────────────────────────────────────────────
 r = redis.Redis(
@@ -65,7 +72,7 @@ def jwt_required(view_fn):
     return wrapper
 
 
-# ── Validation ────────────────────────────────────────────────────────────────
+# ── Prompt validation ─────────────────────────────────────────────────────────
 def validate_prompt_data(data):
     """
     Validate prompt fields.
@@ -98,7 +105,6 @@ def validate_prompt_data(data):
         errors['complexity'] = 'Complexity must be a number between 1 and 10.'
         complexity = None
 
-    # tags must be a list of non-empty strings
     if not isinstance(tags_raw, list):
         errors['tags'] = 'Tags must be an array of strings.'
         tags_raw = []
@@ -132,11 +138,77 @@ def _prompt_to_dict(prompt: Prompt, view_count: int = 0) -> dict:
 
 @csrf_exempt
 @require_http_methods(['POST'])
+def signup_view(request):
+    """
+    POST /api/auth/signup/
+    Body: { "username": "...", "email": "...", "password": "...", "confirm_password": "..." }
+    Returns: { "token": "<jwt>", "username": "..." }
+    """
+    try:
+        body = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON body.'}, status=400)
+
+    username = body.get('username', '').strip()
+    email = body.get('email', '').strip()
+    password = body.get('password', '')
+    confirm_password = body.get('confirm_password', '')
+
+    errors = {}
+
+    # Username
+    if not username:
+        errors['username'] = 'Username is required.'
+    elif len(username) < 3:
+        errors['username'] = 'Username must be at least 3 characters.'
+    elif len(username) > 150:
+        errors['username'] = 'Username must be 150 characters or fewer.'
+    elif User.objects.filter(username=username).exists():
+        errors['username'] = 'Username is already taken.'
+
+    # Email
+    if not email:
+        errors['email'] = 'Email is required.'
+    else:
+        try:
+            validate_email(email)
+        except ValidationError:
+            errors['email'] = 'Enter a valid email address.'
+        else:
+            if User.objects.filter(email=email).exists():
+                errors['email'] = 'An account with this email already exists.'
+
+    # Password
+    if not password:
+        errors['password'] = 'Password is required.'
+    elif len(password) < 8:
+        errors['password'] = 'Password must be at least 8 characters.'
+
+    # Confirm password
+    if not confirm_password:
+        errors['confirm_password'] = 'Please confirm your password.'
+    elif password and confirm_password != password:
+        errors['confirm_password'] = 'Passwords do not match.'
+
+    if errors:
+        return JsonResponse({'errors': errors}, status=422)
+
+    user = User.objects.create_user(
+        username=username,
+        email=email,
+        password=password,
+    )
+    token = _make_token(user)
+    return JsonResponse({'token': token, 'username': user.username}, status=201)
+
+
+@csrf_exempt
+@require_http_methods(['POST'])
 def login_view(request):
     """
     POST /api/auth/login/
     Body: { "username": "...", "password": "..." }
-    Returns: { "token": "<jwt>" }
+    Returns: { "token": "<jwt>", "username": "..." }
     """
     try:
         body = json.loads(request.body)
@@ -147,11 +219,11 @@ def login_view(request):
     password = body.get('password', '')
 
     if not username or not password:
-        return JsonResponse({'error': 'username and password are required.'}, status=400)
+        return JsonResponse({'error': 'Username and password are required.'}, status=400)
 
     user = authenticate(request, username=username, password=password)
     if user is None:
-        return JsonResponse({'error': 'Invalid credentials.'}, status=401)
+        return JsonResponse({'error': 'Invalid username or password.'}, status=401)
 
     token = _make_token(user)
     return JsonResponse({'token': token, 'username': user.username}, status=200)
@@ -161,6 +233,128 @@ def login_view(request):
 def logout_view(request):
     """POST /api/auth/logout/ — stateless JWT, just signal client to discard token."""
     return JsonResponse({'message': 'Logged out.'}, status=200)
+
+
+@csrf_exempt
+@require_http_methods(['POST'])
+def forgot_password_view(request):
+    """
+    POST /api/auth/forgot-password/
+    Body: { "email": "..." }
+    Always returns 200 to prevent email enumeration.
+    """
+    try:
+        body = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON body.'}, status=400)
+
+    email = body.get('email', '').strip()
+
+    if not email:
+        return JsonResponse({'errors': {'email': 'Email is required.'}}, status=422)
+
+    try:
+        validate_email(email)
+    except ValidationError:
+        return JsonResponse({'errors': {'email': 'Enter a valid email address.'}}, status=422)
+
+    # Always return success — don't reveal if email exists
+    try:
+        user = User.objects.get(email=email)
+    except User.DoesNotExist:
+        return JsonResponse({'message': 'If that email is registered, a reset link has been sent.'}, status=200)
+
+    # Check email is configured before trying to send
+    if not getattr(settings, 'EMAIL_HOST_USER', '') or settings.EMAIL_HOST_USER == 'your-email@gmail.com':
+        logger.error('Email not configured. Set EMAIL_HOST_USER and EMAIL_HOST_PASSWORD in .env')
+        return JsonResponse(
+            {'error': 'Email service is not configured. Please contact the administrator.'},
+            status=503,
+        )
+
+    reset_token = PasswordResetToken.create_for_user(user)
+    frontend_url = settings.FRONTEND_URL.rstrip('/')
+    reset_url = f'{frontend_url}/reset-password?token={reset_token.token}'
+
+    try:
+        send_mail(
+            subject='AI Prompt Library — Password Reset',
+            message=(
+                f'Hi {user.username},\n\n'
+                f'We received a request to reset your password.\n\n'
+                f'Click the link below to set a new password (expires in 1 hour):\n\n'
+                f'{reset_url}\n\n'
+                f'If you did not request this, you can safely ignore this email.\n\n'
+                f'— AI Prompt Library'
+            ),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[email],
+            fail_silently=False,
+        )
+    except Exception as exc:  # SMTPAuthenticationError, connection errors, etc.
+        logger.error('Failed to send password reset email to %s: %s', email, exc)
+        # Delete the unused token so it doesn\'t linger
+        reset_token.delete()
+        return JsonResponse(
+            {'error': 'Could not send email. Check your email configuration in .env'},
+            status=503,
+        )
+
+    return JsonResponse({'message': 'If that email is registered, a reset link has been sent.'}, status=200)
+
+
+@csrf_exempt
+@require_http_methods(['POST'])
+def reset_password_view(request):
+    """
+    POST /api/auth/reset-password/
+    Body: { "token": "...", "password": "...", "confirm_password": "..." }
+    """
+    try:
+        body = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON body.'}, status=400)
+
+    token_str = body.get('token', '').strip()
+    password = body.get('password', '')
+    confirm_password = body.get('confirm_password', '')
+
+    errors = {}
+
+    if not token_str:
+        errors['token'] = 'Reset token is required.'
+
+    if not password:
+        errors['password'] = 'New password is required.'
+    elif len(password) < 8:
+        errors['password'] = 'Password must be at least 8 characters.'
+
+    if not confirm_password:
+        errors['confirm_password'] = 'Please confirm your new password.'
+    elif password and confirm_password != password:
+        errors['confirm_password'] = 'Passwords do not match.'
+
+    if errors:
+        return JsonResponse({'errors': errors}, status=422)
+
+    try:
+        reset_token = PasswordResetToken.objects.select_related('user').get(token=token_str)
+    except PasswordResetToken.DoesNotExist:
+        return JsonResponse({'error': 'Invalid or expired reset link. Please request a new one.'}, status=400)
+
+    if not reset_token.is_valid():
+        return JsonResponse({'error': 'This reset link has expired. Please request a new one.'}, status=400)
+
+    # Set new password
+    user = reset_token.user
+    user.set_password(password)
+    user.save()
+
+    # Mark token used
+    reset_token.used = True
+    reset_token.save()
+
+    return JsonResponse({'message': 'Password reset successfully. You can now log in.'}, status=200)
 
 
 # ── Prompt endpoints ──────────────────────────────────────────────────────────
@@ -208,7 +402,6 @@ def prompt_list(request):
     tag_names = cleaned.pop('tags', [])
     prompt = Prompt.objects.create(**cleaned)
 
-    # Resolve / create tags and attach
     for name in tag_names:
         tag, _ = Tag.objects.get_or_create(name=name)
         prompt.tags.add(tag)

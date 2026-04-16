@@ -1,4 +1,5 @@
-import { useState, KeyboardEvent } from 'react';
+import { useState } from 'react';
+import type { KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createPrompt } from '../../services/prompt.service';
 import type { CreatePromptPayload } from '../../models/prompt.model';

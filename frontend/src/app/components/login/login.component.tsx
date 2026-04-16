@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { login } from '../../services/auth.service';
 
 interface Props {
@@ -10,8 +10,8 @@ export default function LoginComponent({ onLoginSuccess }: Props) {
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError]       = useState('');
-  const [loading, setLoading]   = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -39,7 +39,7 @@ export default function LoginComponent({ onLoginSuccess }: Props) {
         <div className="login-card">
           {/* Logo */}
           <div className="login-logo">
-            <span className="logo-icon">✦</span>
+            <img src="/logo.png" alt="AI Prompt Library" className="login-logo-img" />
           </div>
           <h1 className="login-title">Welcome back</h1>
           <p className="login-subtitle">Sign in to manage your AI Prompt Library</p>
@@ -91,11 +91,17 @@ export default function LoginComponent({ onLoginSuccess }: Props) {
             </button>
           </form>
 
+          <p className="login-hint" style={{ marginTop: '12px' }}>
+            <Link to="/forgot-password" style={{ color: 'var(--accent)' }}>
+              Forgot your password?
+            </Link>
+          </p>
+
           <p className="login-hint">
             Don't have an account?{' '}
-            <span style={{ color: 'var(--text-muted)' }}>
-              Ask an admin to create one via Django admin panel.
-            </span>
+            <Link to="/signup" style={{ color: 'var(--accent)' }}>
+              Create one
+            </Link>
           </p>
         </div>
       </div>

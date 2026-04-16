@@ -67,18 +67,22 @@ ai-prompt-library/
 
 ## API Endpoints
 
-| Method | URL | Description |
-|---|---|---|
-| `GET` | `/api/prompts/` | List all prompts |
-| `POST` | `/api/prompts/` | Create a new prompt |
-| `GET` | `/api/prompts/:id/` | Get one prompt + increment Redis view counter |
+| Method | URL | Auth Required | Description |
+|---|---|---|---|
+| `GET` | `/api/prompts/` | No | List all prompts (optional `?tag=<name>` filter) |
+| `POST` | `/api/prompts/` | ✅ JWT | Create a new prompt |
+| `GET` | `/api/prompts/:id/` | No | Get one prompt + increment Redis view counter |
+| `GET` | `/api/tags/` | No | List all available tags |
+| `POST` | `/api/auth/login/` | No | Login and receive a JWT token |
+| `POST` | `/api/auth/logout/` | No | Logout (client discards token) |
 
 ### Example POST body
 ```json
 {
   "title": "Neon Cyberpunk City",
   "content": "A sprawling cyberpunk city at night, neon reflections on wet streets, ultra-detailed, cinematic...",
-  "complexity": 7
+  "complexity": 7,
+  "tags": ["cyberpunk", "sci-fi", "night"]
 }
 ```
 
@@ -140,7 +144,7 @@ python manage.py runserver
 cd frontend
 npm install
 npm run dev
-# Opens at http://localhost:4200
+# Opens at http://localhost:5173
 # /api calls are proxied to http://localhost:8000 via vite.config.ts
 ```
 
