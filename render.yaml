@@ -68,6 +68,7 @@ services:
     region: singapore
     plan: free
     maxmemoryPolicy: allkeys-lru
+    ipAllowList: []   # empty = internal access only (secure)
 
 # ── PostgreSQL Database ──────────────────────────────────────
 databases:
