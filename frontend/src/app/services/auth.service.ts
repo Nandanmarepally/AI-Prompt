@@ -2,7 +2,7 @@
 const TOKEN_KEY = 'ai_prompt_token';
 const USERNAME_KEY = 'ai_prompt_username';
 
-const BASE_URL = '/api';
+const BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 export interface LoginPayload { username: string; password: string; }
 export interface LoginResponse { token: string; username: string; }
