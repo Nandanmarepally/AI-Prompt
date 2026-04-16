@@ -3,7 +3,6 @@ import logging
 import datetime
 
 import jwt
-import redis
 from django.conf import settings
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
@@ -17,14 +16,6 @@ from django.views.decorators.http import require_http_methods
 logger = logging.getLogger(__name__)
 
 from .models import Prompt, Tag, PasswordResetToken
-
-# ── Redis client ─────────────────────────────────────────────────────────────
-r = redis.Redis(
-    host=settings.REDIS_HOST,
-    port=settings.REDIS_PORT,
-    db=0,
-    decode_responses=True,
-)
 
 
 # ── JWT helpers ───────────────────────────────────────────────────────────────
@@ -375,9 +366,7 @@ def prompt_list(request):
 
         data = []
         for p in qs:
-            key = f'prompt:{p.id}:views'
-            views = r.get(key)
-            data.append(_prompt_to_dict(p, int(views) if views else 0))
+            data.append(_prompt_to_dict(p, 0))
 
         return JsonResponse(data, safe=False, status=200)
 
@@ -412,17 +401,14 @@ def prompt_list(request):
 @require_http_methods(['GET'])
 def prompt_detail(request, pk):
     """
-    GET /api/prompts/<pk>/  — retrieve one prompt and increment Redis view counter
+    GET /api/prompts/<pk>/  — retrieve one prompt
     """
     try:
         prompt = Prompt.objects.prefetch_related('tags').get(pk=pk)
     except Prompt.DoesNotExist:
         return JsonResponse({'error': 'Prompt not found.'}, status=404)
 
-    key = f'prompt:{prompt.id}:views'
-    view_count = r.incr(key)
-
-    return JsonResponse(_prompt_to_dict(prompt, view_count), status=200)
+    return JsonResponse(_prompt_to_dict(prompt, 0), status=200)
 
 
 @require_http_methods(['GET'])
