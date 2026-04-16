@@ -1,0 +1,97 @@
+# ── Render Infrastructure-as-Code ────────────────────────────
+# Deploy:  render.com → New → Blueprint → connect this repo
+# Docs:    https://render.com/docs/blueprint-spec
+
+services:
+  # ── Django Web Service ──────────────────────────────────────
+  - type: web
+    name: aiprompt-backend
+    runtime: python
+    region: singapore       # closest to India; change if needed
+    rootDir: backend        # Django project lives in /backend
+    buildCommand: chmod +x build.sh && ./build.sh
+    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    healthCheckPath: /api/tags/
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true          # Render auto-generates a secure key
+
+      - key: DEBUG
+        value: "False"
+
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+
+      # ── PostgreSQL (auto-linked from Render DB below) ──────
+      - key: DB_NAME
+        fromDatabase:
+          name: aiprompt-db
+          property: database
+
+      - key: DB_USER
+        fromDatabase:
+          name: aiprompt-db
+          property: user
+
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: aiprompt-db
+          property: password
+
+      - key: DB_HOST
+        fromDatabase:
+          name: aiprompt-db
+          property: host
+
+      - key: DB_PORT
+        fromDatabase:
+          name: aiprompt-db
+          property: port
+
+      # ── Redis (auto-linked from Render Redis below) ────────
+      - key: REDIS_HOST
+        fromService:
+          type: redis
+          name: aiprompt-redis
+          property: host
+
+      - key: REDIS_PORT
+        fromService:
+          type: redis
+          name: aiprompt-redis
+          property: port
+
+      # ── Email (fill in your Gmail App Password) ───────────
+      # Add these manually in Render dashboard → Environment tab:
+      #   EMAIL_HOST_USER    = your-email@gmail.com
+      #   EMAIL_HOST_PASSWORD = your-16-char-app-password
+      #   DEFAULT_FROM_EMAIL  = your-email@gmail.com
+      - key: EMAIL_HOST
+        value: smtp.gmail.com
+
+      - key: EMAIL_PORT
+        value: "587"
+
+      # ── Frontend URL (update after deploying frontend) ─────
+      # Add manually in Render dashboard:
+      #   FRONTEND_URL = https://your-frontend.onrender.com
+      - key: FRONTEND_URL
+        value: http://localhost
+
+      # ── CORS (add your deployed frontend URL) ─────────────
+      # Add manually in Render dashboard:
+      #   CORS_ALLOWED_ORIGINS = https://your-frontend.onrender.com
+
+# ── PostgreSQL Database ─────────────────────────────────────────
+databases:
+  - name: aiprompt-db
+    databaseName: promptdb
+    user: promptuser
+    region: singapore
+
+# ── Redis ───────────────────────────────────────────────────────
+  - type: redis
+    name: aiprompt-redis
+    region: singapore
+    plan: free
+    maxmemoryPolicy: allkeys-lru

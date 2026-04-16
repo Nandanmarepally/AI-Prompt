@@ -27,6 +27,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # serve static files in production
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -95,20 +96,31 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+# Serve compressed static files with WhiteNoise
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# CORS — allow Angular dev server
+# ── CORS ──────────────────────────────────────────────────────
+_frontend_url = os.environ.get('FRONTEND_URL', '').rstrip('/')
+
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:4200',
     'http://127.0.0.1:4200',
     'http://localhost:5173',
     'http://127.0.0.1:5173',
+    'http://localhost',
 ]
-CORS_ALLOW_ALL_ORIGINS = True  # permissive for dev
+if _frontend_url:
+    CORS_ALLOWED_ORIGINS.append(_frontend_url)
+
+CORS_ALLOW_ALL_ORIGINS = DEBUG  # permissive in dev only
 
 CSRF_TRUSTED_ORIGINS = [
     'http://localhost:4200',
+    'http://localhost:5173',
     'http://localhost:80',
     'http://localhost',
 ]
+if _frontend_url:
+    CSRF_TRUSTED_ORIGINS.append(_frontend_url)
