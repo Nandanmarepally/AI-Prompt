@@ -1,35 +1,35 @@
 services:
-  # ── PostgreSQL ──────────────────────────────────────────────
-  db:
-    image: postgres:16-alpine
-    container_name: promptlib_db
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${DB_NAME}
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - promptlib_net
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
+  # ── PostgreSQL (Commented out because using Supabase)  ──────────────
+  # db:
+  #   image: postgres:16-alpine
+  #   container_name: promptlib_db
+  #   restart: unless-stopped
+  #   environment:
+  #     POSTGRES_DB: ${DB_NAME}
+  #     POSTGRES_USER: ${DB_USER}
+  #     POSTGRES_PASSWORD: ${DB_PASSWORD}
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   networks:
+  #     - promptlib_net
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+  #     interval: 5s
+  #     timeout: 5s
+  #     retries: 10
 
-  # ── Redis ────────────────────────────────────────────────────
-  redis:
-    image: redis:7-alpine
-    container_name: promptlib_redis
-    restart: unless-stopped
-    networks:
-      - promptlib_net
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
+  # ── Redis (Commented out because not currently used) ────────────────
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: promptlib_redis
+  #   restart: unless-stopped
+  #   networks:
+  #     - promptlib_net
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "ping"]
+  #     interval: 5s
+  #     timeout: 3s
+  #     retries: 10
 
   # ── Django Backend ───────────────────────────────────────────
   backend:
@@ -44,10 +44,10 @@ services:
       DB_NAME: ${DB_NAME}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
-      DB_HOST: db
-      DB_PORT: 5432
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
+      DB_HOST: ${DB_HOST:-aws-1-ap-southeast-1.pooler.supabase.com}
+      DB_PORT: ${DB_PORT:-5432}
+      REDIS_HOST: ${REDIS_HOST:-}
+      REDIS_PORT: ${REDIS_PORT:-}
       EMAIL_HOST: ${EMAIL_HOST:-smtp.gmail.com}
       EMAIL_PORT: ${EMAIL_PORT:-587}
       EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
@@ -56,11 +56,11 @@ services:
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
     ports:
       - "8000:8000"
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+    # depends_on:
+    #   db:
+    #     condition: service_healthy
+    #   redis:
+    #     condition: service_healthy
     networks:
       - promptlib_net
 
