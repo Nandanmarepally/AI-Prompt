@@ -1,5 +1,4 @@
 Django==4.2.16
-psycopg2-binary==2.9.9
 redis==5.0.8
 django-cors-headers==4.4.0
 gunicorn==22.0.0
