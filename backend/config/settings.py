@@ -121,6 +121,8 @@ CSRF_TRUSTED_ORIGINS = [
     'http://localhost:5173',
     'http://localhost:80',
     'http://localhost',
+    'http://127.0.0.1:4200',
+    'http://127.0.0.1:5173',
 ]
 if _frontend_url:
     CSRF_TRUSTED_ORIGINS.append(_frontend_url)
