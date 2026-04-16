@@ -18,6 +18,7 @@ media/
 # ── Environment secrets ─────────────────────────────────────────
 .env
 .env.*
+!frontend/.env
 
 # ── Virtual environments ────────────────────────────────────────
 venv/
